@@ -143,7 +143,6 @@ else:
                     st.success("Your message has been handed over to a courier!")
                 else:
                     st.error("The parchment is blank! Write a message first.")
-
     # TAB 5: JARL'S COURT (Jarl Only)
     with active_tabs[4]:
         st.subheader("The Jarl's Royal Court & Vault")
@@ -154,11 +153,11 @@ else:
             st.markdown("### 🪙 The Hold Treasury")
             
             # Fetch data to calculate calculated vault amounts
-            all_rentals = supabase.table("rentals").select("rentals_gold_rectification", count="exact").eq("id", -1).execute()
+            all_rentals = supabase.table("rentals").select("property_name").eq("id", -1).execute()
             
-            # Initialize or read a manual rectification value stored securely in an unused row ID (-1)
+            # Safe database check to read manual rectification value from index array list
             rect_row = supabase.table("rentals").select("rent_amount").eq("id", -1).execute()
-            rectification_modifier = rect_row.data[0]["rent_amount"] if rect_row.data else 0
+            rectification_modifier = rect_row.data[0]["rent_amount"] if (rect_row.data and len(rect_row.data) > 0) else 0
             
             # Sum up valid automated gold entries from standard active leases
             active_gold_data = supabase.table("rentals").select("rent_amount").eq("is_paid", True).gt("id", 0).execute()
@@ -180,7 +179,7 @@ else:
                 st.info("Adjust the balance directly if taxes or unexpected debts changed the treasury vault calculation totals.")
                 new_rect = st.number_input("Adjustment Value (Can be positive or negative)", value=int(rectification_modifier), step=50)
                 if st.button("Apply Vault Rectification"):
-                    if rect_row.data:
+                    if rect_row.data and len(rect_row.data) > 0:
                         supabase.table("rentals").update({"rent_amount": new_rect}).eq("id", -1).execute()
                     else:
                         supabase.table("rentals").insert({"id": -1, "property_name": "VAULT_MODIFIER", "property_type": "System", "rent_amount": new_rect, "is_paid": True}).execute()
@@ -220,4 +219,4 @@ else:
                     supabase.auth.admin.delete_user(steward_dict[target_user])
                     st.rerun()
             else:
-                st.info("No subordinate stewards found in the Hold.")
+                st.info("No subordinate stewards found in the Hold.")              
