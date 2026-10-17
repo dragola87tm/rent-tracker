@@ -134,8 +134,7 @@ else:
                     supabase.table("rentals").update(payload).eq("id", target_row['id']).execute()
                     st.success("Entry details rewritten in ink.")
                     st.rerun()
-            -- Allow the property classification column to accept archived labels safely
-ALTER TABLE rentals ALTER COLUMN property_type TYPE TEXT;
+
 
         else:
             st.info("No recorded assets found to modify.")
