@@ -38,7 +38,7 @@ if not st.session_state.logged_in:
     username = st.text_input("Username (Email)")
     password = st.text_input("Password", type="password")
     
-    if st.button("Enter Whiterun"):
+    if st.button("Enter Winterhold"):
         try:
             # Authenticate via Supabase
             res = supabase.auth.sign_in_with_password({"email": username, "password": password})
