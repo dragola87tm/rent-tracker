@@ -105,7 +105,10 @@ else:
             target_row = property_options[selected_key]
             
             new_name = st.text_input("Modify Property Name", value=target_row['property_name'])
-            new_type = st.selectbox("Modify Classification", ["House", "Barrel"], index=["House", "Barrel"].index(target_row['property_type']))
+             current_type = target_row.get('property_type', 'House')
+            default_index = ["House", "Barrel"].index(current_type) if current_type in ["House", "Barrel"] else 0
+            
+            new_type = st.selectbox("Modify Classification", ["House", "Barrel"], index=default_index)
             new_tenant = st.text_input("Update Tenant Name", value=target_row['current_tenant'] if target_row['current_tenant'] else "")
             new_gold = st.number_input("Update Weekly Rent (Gold)", min_value=0, value=int(target_row['rent_amount']))
             current_payment_status = target_row['is_paid']
