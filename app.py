@@ -26,17 +26,10 @@ if not st.session_state.logged_in:
             res = supabase.auth.sign_in_with_password({"email": username, "password": password})
             st.session_state.logged_in = True
             st.session_state.user_email = username
-                        # Safe list parsing to extract your role string correctly
             user_id = res.user.id
             profile = supabase.table("user_profiles").select("role").eq("id", user_id).execute()
-            
-            if profile.data and len(profile.data) > 0:
-                st.session_state.user_role = profile.data[0]["role"]
-            else:
-                st.session_state.user_role = "Steward"
-                
+            st.session_state.user_role = profile.data["role"] if profile.data else "Steward"
             st.rerun()
-
         except Exception:
             st.error("You committed crimes against Skyrim and her people! (Invalid Credentials)")
 else:
@@ -112,42 +105,27 @@ else:
             target_row = property_options[selected_key]
             
             new_name = st.text_input("Modify Property Name", value=target_row['property_name'])
-            
+            new_type = st.selectbox("Modify Classification", ["House", "Barrel"], index=["House", "Barrel"].index(target_row['property_type']))
             new_tenant = st.text_input("Update Tenant Name", value=target_row['current_tenant'] if target_row['current_tenant'] else "")
-            raw_rent = target_row.get('rent_amount')
-            clean_rent = int(raw_rent) if raw_rent is not None else 0
+            new_gold = st.number_input("Update Weekly Rent (Gold)", min_value=0, value=int(target_row['rent_amount']))
             current_payment_status = target_row['is_paid']
             new_paid = st.checkbox("Weekly Rent Paid", value=current_payment_status)
-                        # Safe classification parsing with fallback default
-            current_type = target_row.get('property_type', 'House')
-            default_index = ["House", "Barrel"].index(current_type) if current_type in ["House", "Barrel"] else 0
             
-            new_type = st.selectbox("Modify Classification", ["House", "Barrel"], index=default_index)
-
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Apply Ledger Modifications"):
-                    # Safe type conversion to ensure database compatibility
-                    clean_gold_value = int(new_gold) if new_gold is not None else 0
-                    
-                    payload = {
-                        "property_name": str(new_name), 
-                        "property_type": str(new_type), 
-                        "current_tenant": str(new_tenant) if new_tenant else None, 
-                        "rent_amount": clean_gold_value, 
-                        "is_paid": bool(new_paid)
-                    }
-                    
+                    payload = {"property_name": new_name, "property_type": new_type, "current_tenant": new_tenant, "rent_amount": new_gold, "is_paid": new_paid}
                     if new_paid and not current_payment_status:
                         payload["paid_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                     elif not new_paid:
                         payload["paid_at"] = None
-                        
-                    supabase.table("rentals").update(payload).eq("id", int(target_row['id'])).execute()
-                    st.success("Entry details successfully rewritten in ink.")
+                    supabase.table("rentals").update(payload).eq("id", target_row['id']).execute()
+                    st.success("Entry details rewritten in ink.")
                     st.rerun()
-
-
+            with col2:
+                if st.button("🚨 Strike from Ledger (Delete Record)"):
+                    supabase.table("rentals").delete().eq("id", target_row['id']).execute()
+                    st.rerun()
         else:
             st.info("No recorded assets found to modify.")
 
