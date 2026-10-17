@@ -26,10 +26,17 @@ if not st.session_state.logged_in:
             res = supabase.auth.sign_in_with_password({"email": username, "password": password})
             st.session_state.logged_in = True
             st.session_state.user_email = username
+                        # Safe list parsing to extract your role string correctly
             user_id = res.user.id
             profile = supabase.table("user_profiles").select("role").eq("id", user_id).execute()
-            st.session_state.user_role = profile.data["role"] if profile.data else "Steward"
+            
+            if profile.data and len(profile.data) > 0:
+                st.session_state.user_role = profile.data[0]["role"]
+            else:
+                st.session_state.user_role = "Steward"
+                
             st.rerun()
+
         except Exception:
             st.error("You committed crimes against Skyrim and her people! (Invalid Credentials)")
 else:
