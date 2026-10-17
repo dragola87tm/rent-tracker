@@ -114,7 +114,7 @@ else:
             new_name = st.text_input("Modify Property Name", value=target_row['property_name'])
             
             new_tenant = st.text_input("Update Tenant Name", value=target_row['current_tenant'] if target_row['current_tenant'] else "")
-              raw_rent = target_row.get('rent_amount')
+            raw_rent = target_row.get('rent_amount')
             clean_rent = int(raw_rent) if raw_rent is not None else 0
             
             new_gold = st.number_input("Update Weekly Rent (Gold)", min_value=0, value=clean_rent)
