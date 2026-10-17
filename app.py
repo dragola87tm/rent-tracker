@@ -14,6 +14,7 @@ st.title("⚔️ The Hold's Rental Ledger")
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_role = "Steward"
+    st.session_state.user_email = ""
 
 if not st.session_state.logged_in:
     st.subheader("Identify Yourself to the Guard")
@@ -24,19 +25,21 @@ if not st.session_state.logged_in:
         try:
             res = supabase.auth.sign_in_with_password({"email": username, "password": password})
             st.session_state.logged_in = True
+            st.session_state.user_email = username
             user_id = res.user.id
             profile = supabase.table("user_profiles").select("role").eq("id", user_id).execute()
-            st.session_state.user_role = profile.data[0]["role"] if profile.data else "Steward"
+            st.session_state.user_role = profile.data["role"] if profile.data else "Steward"
             st.rerun()
         except Exception:
             st.error("You committed crimes against Skyrim and her people! (Invalid Credentials)")
 else:
     st.sidebar.markdown(f"**Current Rank:** {st.session_state.user_role}")
+    st.sidebar.markdown(f"**User:** {st.session_state.user_email}")
     if st.sidebar.button("Leave Hold (Logout)"):
         st.session_state.logged_in = False
         st.rerun()
 
-    active_tabs = st.tabs(["📋 View Ledger", "🪙 Register Asset", "⚙️ Manage & Edit Assets", "👑 Jarl's Court"])
+    active_tabs = st.tabs(["📋 View Ledger", "🪙 Register Asset", "⚙️ Manage & Edit Assets", "✉️ Contact Jarl", "👑 Jarl's Court"])
 
     # TAB 1: VIEW LEDGER
     with active_tabs[0]:
@@ -123,13 +126,90 @@ else:
                 if st.button("🚨 Strike from Ledger (Delete Record)"):
                     supabase.table("rentals").delete().eq("id", target_row['id']).execute()
                     st.rerun()
+        else:
+            st.info("No recorded assets found to modify.")
 
-    # TAB 4: MASTER USER CONTROLS (Jarl Only)
+    # TAB 4: CONTACT JARL (Steward Message Panel)
     with active_tabs[3]:
-        st.subheader("The Jarl's Decree")
+        st.subheader("Send a Courier to the Jarl")
+        with st.form("message_jarl_form"):
+            msg_text = st.text_area("Write your message here, Steward...", max_chars=500)
+            if st.form_submit_button("Send Courier to Dragonsreach"):
+                if msg_text.strip():
+                    supabase.table("hold_messages").insert({
+                        "sender_username": st.session_state.user_email,
+                        "message_content": msg_text.strip()
+                    }).execute()
+                    st.success("Your message has been handed over to a courier!")
+                else:
+                    st.error("The parchment is blank! Write a message first.")
+
+    # TAB 5: JARL'S COURT (Jarl Only)
+    with active_tabs[4]:
+        st.subheader("The Jarl's Royal Court & Vault")
         if st.session_state.user_role != "Jarl":
             st.error("Stop right there! You do not have the Jarl's authority to access these chambers.")
         else:
+            # --- GOLD VAULT SECTION ---
+            st.markdown("### 🪙 The Hold Treasury")
+            
+            # Fetch data to calculate calculated vault amounts
+            all_rentals = supabase.table("rentals").select("rentals_gold_rectification", count="exact").eq("id", -1).execute()
+            
+            # Initialize or read a manual rectification value stored securely in an unused row ID (-1)
+            rect_row = supabase.table("rentals").select("rent_amount").eq("id", -1).execute()
+            rectification_modifier = rect_row.data[0]["rent_amount"] if rect_row.data else 0
+            
+            # Sum up valid automated gold entries from standard active leases
+            active_gold_data = supabase.table("rentals").select("rent_amount").eq("is_paid", True).gt("id", 0).execute()
+            calculated_gold = sum([row["rent_amount"] for row in active_gold_data.data]) if active_gold_data.data else 0
+            
+            total_vault_gold = calculated_gold + rectification_modifier
+
+            # Display Ledger Metric Card
+            st.markdown(f"""
+            <div style="background-color: #2c2217; border: 2px solid #dfb76c; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+                <span style="font-size: 16px; text-transform: uppercase; color: #bda88a; letter-spacing: 2px;">Total Gold Pieces in Vault</span>
+                <h1 style="font-size: 45px; color: #dfb76c; margin: 10px 0 0 0; text-shadow: 3px 3px 0px #000;">💰 {total_vault_gold} o</h1>
+                <p style="font-size: 12px; color: #8e7a63; margin-top: 5px;">(Base Ledger: {calculated_gold}g | Jarl Adjustments: {rectification_modifier:+}g)</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Rectify Treasury Errors Form
+            with st.expander("⚖️ Rectify Vault Accounting Errors"):
+                st.info("Adjust the balance directly if taxes or unexpected debts changed the treasury vault calculation totals.")
+                new_rect = st.number_input("Adjustment Value (Can be positive or negative)", value=int(rectification_modifier), step=50)
+                if st.button("Apply Vault Rectification"):
+                    if rect_row.data:
+                        supabase.table("rentals").update({"rent_amount": new_rect}).eq("id", -1).execute()
+                    else:
+                        supabase.table("rentals").insert({"id": -1, "property_name": "VAULT_MODIFIER", "property_type": "System", "rent_amount": new_rect, "is_paid": True}).execute()
+                    st.success("Treasury values updated in the high book.")
+                    st.rerun()
+
+            # --- MESSAGES PANEL SECTION ---
+            st.markdown("---")
+            st.markdown("### ✉️ Courier Reports (Steward Messages)")
+            messages_data = supabase.table("hold_messages").select("*").order("sent_at", desc=True).execute()
+            
+            if messages_data.data:
+                for msg in messages_data.data:
+                    st.markdown(f"""
+                    <div style="background-color: #1f1a14; border-left: 4px solid #bda88a; padding: 12px; margin-bottom: 8px;">
+                        <strong style="color:#dfb76c;">From:</strong> {msg['sender_username']}<br/>
+                        <span style="font-size:14px; color:#d4c4a8;">{msg['message_content']}</span><br/>
+                        <small style="color:#6e5f4f;">Received at: {msg['sent_at'][:16]}</small>
+                    </div>
+                    """, unsafe_allow_html=True)
+                if st.button("Clear All Read Messages"):
+                    supabase.table("hold_messages").delete().neq("id", 0).execute()
+                    st.success("All messages cleared!")
+                    st.rerun()
+            else:
+                st.info("No messages brought by courier today.")
+
+            # --- USER BANISHMENT CONTROL ---
+            st.markdown("---")
             st.warning("Master Controls: Banish Users from the Hold")
             stewards = supabase.table("user_profiles").select("id, username").eq("role", "Steward").execute()
             if stewards.data:
