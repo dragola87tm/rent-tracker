@@ -127,13 +127,24 @@ else:
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Apply Ledger Modifications"):
-                    payload = {"property_name": new_name, "property_type": new_type, "current_tenant": new_tenant, "rent_amount": new_gold, "is_paid": new_paid}
+                    # Safe type conversion to ensure database compatibility
+                    clean_gold_value = int(new_gold) if new_gold is not None else 0
+                    
+                    payload = {
+                        "property_name": str(new_name), 
+                        "property_type": str(new_type), 
+                        "current_tenant": str(new_tenant) if new_tenant else None, 
+                        "rent_amount": clean_gold_value, 
+                        "is_paid": bool(new_paid)
+                    }
+                    
                     if new_paid and not current_payment_status:
                         payload["paid_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
                     elif not new_paid:
                         payload["paid_at"] = None
-                    supabase.table("rentals").update(payload).eq("id", target_row['id']).execute()
-                    st.success("Entry details rewritten in ink.")
+                        
+                    supabase.table("rentals").update(payload).eq("id", int(target_row['id'])).execute()
+                    st.success("Entry details successfully rewritten in ink.")
                     st.rerun()
 
 
